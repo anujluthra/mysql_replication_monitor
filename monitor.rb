@@ -52,8 +52,8 @@ db = Mysql.real_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT)
 latest_heartbeat = Time.parse(db.query("select ts from #{DB_HEARTBEAT_TABLE}").fetch_row.first)
 current_server_time = Time.now
 
-allowed_lag = ALLOWED_LAG_IN_SECONDS
-if (current_server_time - allowed_lag) > latest_heartbeat
+
+if (current_server_time - ALLOWED_LAG_IN_SECOND) > latest_heartbeat
   # replication is lagging so send email
   error_log_last_100_lines = `tail -n100 #{DB_ERROR_LOG}`
   message = <<END_OF_MESSAGE
