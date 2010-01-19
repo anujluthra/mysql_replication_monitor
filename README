@@ -1,0 +1,37 @@
+configs should be defined in config.yml placed at same location as monitor.rb
+
+-----
+
+heartbeat_table: heartbeat
+allowed_lag: 120
+server_name: slave1
+
+sms_configs:
+  sms_gateway_domain: sms.mail.com
+  sender: configured.email@localhost.com
+  recepient: 25413652785
+
+email_configs:
+  smtp_host: mail.localhost
+  smtp_port: 25
+  sender: default@sender.com
+  recepients: getter@alert.com
+
+databases:
+  replicated1:
+    host: 127.0.0.1
+    port: 3305
+    database: replicated_production
+    user: replication
+    password: repl_pwd
+    error_log: absolute/path/to/error.log
+
+  replicated2:
+    host: 127.0.0.1
+    port: 3304
+    database: replicated_production2
+    user: replication
+    password: repl_pwd
+    error_log: absolute/path/to/error.log
+
+

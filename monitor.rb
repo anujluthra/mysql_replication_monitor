@@ -23,54 +23,78 @@ require 'rubygems'
 require 'mysql'
 require 'time'
 require 'net/smtp'
+require 'yaml'
 
-# db settings
-DB_USER = 'user'
-DB_PASS = 'pwd'
-DB_PORT = 3306 
-DB_HOST = '127.0.0.1'
-DB_NAME = 'db_production'
-DB_HEARTBEAT_TABLE = 'heartbeat'
-ALLOWED_LAG_IN_SECONDS = 120
-DB_ERROR_LOG = '/absolute/path/to/error.log'
-SERVER_NAME = 'SLAVE-1'
 
-# mail settings
-SMTP_HOST = 'mail.localhost'
-SMTP_PORT = 25
-SENDER    = 'user@localhost'
-SUBJECT   = "Replication for #{DB_NAME} is lagging more than allowed limit on #{SERVER_NAME}" 
-NOTIFICATION_RECEPIENTS = 'concerned@localhost'
-
-def send_email(message, from=SENDER, to=NOTIFICATION_RECEPIENTS)
-  Net::SMTP.start(SMTP_HOST, SMTP_PORT) do |smtp|
+def send_email(message, from=@email_configs['sender'], to=@email_configs['recepients'])
+  Net::SMTP.start(@email_configs['smtp_host'], @email_configs['smtp_port']) do |smtp|
     smtp.send_message message, from, to
   end
 end
 
-db = Mysql.real_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT)
-latest_heartbeat = Time.parse(db.query("select ts from #{DB_HEARTBEAT_TABLE}").fetch_row.first)
-current_server_time = Time.now
+def send_sms(message,from=@sms_configs['sender'], to=@sms_configs['recepient'])
+  send_email message, from, "#{to}@#{@sms_configs['sms_gateway_domain']}"
+end
 
 
-if (current_server_time - ALLOWED_LAG_IN_SECOND) > latest_heartbeat
-  # replication is lagging so send email
-  error_log_last_100_lines = `tail -n100 #{DB_ERROR_LOG}`
-  message = <<END_OF_MESSAGE
-From: Replication Monitor
-Subject: #{SUBJECT}
+def email_message(latest_heartbeat, current_server_time, db_config)
 
-Last Heartbeat recieved via replication : #{latest_heartbeat}
-The current time on replication server  : #{current_server_time}
+  error_log_last_100_lines = `tail -n20 #{db_config['error_log']}`
+  <<END_OF_MESSAGE
+  From: Replication Monitor
+  Subject: Replication lag on #{@server_name} for #{db_config['database']}
 
-Replication is lagging more than the allowed limit of #{ALLOWED_LAG_IN_SECONDS} seconds. Please check the replication server immidiately.
+  Last Heartbeat recieved via replication : #{latest_heartbeat}
+  The current time on replication server  : #{current_server_time}
 
-MYSQL ERROR OUTPUT (located at #{DB_ERROR_LOG})
-======================================================
-#{error_log_last_100_lines}
+  Replication is lagging for more than the allowed limit of #{@allowed_lag} seconds.
+  Please check the replication server immidiately.
+
+  MYSQL ERROR OUTPUT (located at #{db_config['error_log']})
+  ======================================================
+  #{error_log_last_100_lines}
 
 END_OF_MESSAGE
 
-  send_email message
 end
+
+def read_settings
+  configs = YAML::load(File.read 'config.yml')
+  @heartbeat_table = configs['heartbeat_table']
+  @allowed_lag = configs['allowed_lag'].to_i
+  @server_name = configs['server_name']
+
+  @email_configs = configs['email_configs']
+  @sms_configs = configs['sms_configs']
+  @db_configs = configs['databases']
+end
+
+def do_check(db_config)
+  ################################################
+  # Connect to database and fetch latest heartbeat
+  db = Mysql.real_connect(db_config['host'], db_config['user'], db_config['password'], db_config['database'], db_config['port'])
+  latest_heartbeat = Time.parse(db.query("select ts from #{@heartbeat_table}").fetch_row.first)
+  current_server_time = Time.now
+
+  # Compare timestamps and notify if necessary
+  if (current_server_time - @allowed_lag) > latest_heartbeat
+    send_email email_message(latest_heartbeat, current_server_time, db_config)
+    short_message = "fantasea replication is lagging on #{@server_name}"
+    send_sms short_message
+  end
+
+end
+
+
+def start
+  read_settings
+  @db_configs.each_pair do |db_name, db_settings|
+    puts "Checking replication status for #{db_name}"
+    do_check(db_settings)
+  end
+end
+
+
+start
+
 
