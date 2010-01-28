@@ -48,33 +48,41 @@ def read_settings
 end
 
 def do_check(db_config)
-  ################################################
-  # Connect to database and fetch latest heartbeat
-  db = Mysql.real_connect(db_config['host'], db_config['user'], db_config['password'], db_config['database'], db_config['port'])
-  query = "select ts from #{@heartbeat_table}"
-  latest_heartbeat = Time.parse(db.query(query).fetch_row.first)
-  current_server_time = Time.now
+  begin
+    ################################################
+    # Connect to database and fetch latest heartbeat
+    db = Mysql.real_connect(db_config['host'], db_config['user'], db_config['password'], db_config['database'], db_config['port'])
+    query = "select ts from #{@heartbeat_table}"
+    latest_heartbeat = Time.parse(db.query(query).fetch_row.first)
+    current_server_time = Time.now
 
-  # Compare timestamps and notify if necessary
-  if (current_server_time - @allowed_lag) > latest_heartbeat
-    puts 'lag detected...'
+    # Compare timestamps and notify if necessary
+    if (current_server_time - @allowed_lag) > latest_heartbeat
+      puts 'lag detected...'
 
-    @email_header = gen_email_header(db_config)
+      @email_header = gen_email_header(db_config)
 
-    if !@email_configs.nil?
-      puts 'sending email alert...'
-      send_email email_message(latest_heartbeat, current_server_time, db_config)
+      if !@email_configs.nil?
+        puts 'sending email alert...'
+        send_email email_message(latest_heartbeat, current_server_time, db_config)
+      end
+
+      if !@sms_configs.nil?
+        puts 'sending sms alert...'
+        short_message = "fantasea replication is lagging on #{@server_name}"
+        send_sms short_message
+      end
+
     end
 
-    if !@sms_configs.nil?
-      puts 'sending sms alert...'
-      short_message = "fantasea replication is lagging on #{@server_name} by #{current_server_time - latest_heartbeat}seconds"
-      send_sms short_message
-    end
-
+  rescue Exception => e
+    message = "Error occured in accessing slave database !! ==>  #{e.message}"
+    puts message
+    send_email message
   end
 
 end
+
 
 
 def start
