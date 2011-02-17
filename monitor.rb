@@ -49,7 +49,7 @@ def do_check(db_config)
   begin
     ################################################
     # Connect to database
-    
+    @email_header = gen_email_header(db_config)    
     db = Mysql.real_connect(db_config['host'], db_config['user'], db_config['password'], db_config['database'], db_config['port'])
     
     replication_lag = case db_config['strategy']
@@ -100,8 +100,6 @@ end
 
 
 def notify_of_excessive_lag(db_config, detected_lag)
-  @email_header = gen_email_header(db_config)
-
   if !@email_configs.nil?
     puts 'sending email alert...'
     send_email email_message(db_config, detected_lag)
