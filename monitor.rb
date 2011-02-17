@@ -38,7 +38,7 @@ end
 
 
 def read_settings
-  configs = YAML::load( File.read(File.expand_path('config.yml', File.dirname('__FILE__') ) ) )
+  configs = YAML::load( File.read(File.expand_path('config.yml', File.dirname(__FILE__) ) ) )
   @allowed_lag = configs['allowed_lag'].to_i
   @server_name = configs['server_name']
   @sms_configs = configs['sms_configs']
