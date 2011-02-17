@@ -76,9 +76,12 @@ def do_check(db_config)
     end
 
   rescue Exception => e
-    message = "Error occured in accessing slave database !! ==>  #{e.message}"
+    message = "Error  ==>  #{e.message}"
     puts message
     send_email message
+  ensure
+     # disconnect from server
+     db.close if db
   end
 
 end
