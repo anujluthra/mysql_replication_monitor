@@ -22,13 +22,14 @@
 require 'rubygems'
 require 'mysql'
 require 'time'
-require 'net/smtp'
 require 'yaml'
+require 'mail'
 
 
 
 def start
   read_settings
+
   @db_configs.each_pair do |db_name, db_settings|
     puts "Checking replication status for #{db_name}"
     do_check(db_settings)
@@ -40,24 +41,29 @@ def read_settings
   configs = YAML::load( File.read(File.dirname('__FILE__') + '/config.yml') )
   @allowed_lag = configs['allowed_lag'].to_i
   @server_name = configs['server_name']
-  @email_configs = configs['email_configs']
   @sms_configs = configs['sms_configs']
+  @email_configs = configs['email_configs']
   @db_configs = configs['databases']
+  smtp_configs = configs['smtp_configs']
+  
+  Mail.defaults do
+    delivery_method :smtp, smtp_configs.symbolize_keys
+  end
 end
+
 
 def do_check(db_config)
   begin
     ################################################
     # Connect to database
-    @email_header = gen_email_header(db_config)    
     db = Mysql.real_connect(db_config['host'], db_config['user'], db_config['password'], db_config['database'], db_config['port'])
-    
+
     replication_lag = case db_config['strategy']
       when 'heartbeat'
         do_heartbeat_check(db, db_config)
       when 'slave_status'
         do_slave_status_check(db)
-      else 
+      else
         raise 'Unknown strategy defined for checking replication lag'
     end
 
@@ -68,7 +74,7 @@ def do_check(db_config)
     end
 
   rescue Exception => e
-    message = "Error  ==>  #{e.message}"
+    message = "Error on #{db_config['database']} ==>  #{e.message}"
     puts message
     send_email message
   ensure
@@ -77,6 +83,7 @@ def do_check(db_config)
   end
 
 end
+
 
 
 def do_slave_status_check(db)
@@ -95,7 +102,7 @@ def do_heartbeat_check(db, db_config)
   heartbeat_table = db_config['heartbeat_table']
   query = "select ts from #{heartbeat_table}"
   latest_heartbeat = Time.parse(db.query(query).fetch_row.first)
-  return  current_server_time - latest_heartbeat 
+  return  current_server_time - latest_heartbeat
 end
 
 
@@ -113,10 +120,12 @@ def notify_of_excessive_lag(db_config, detected_lag)
 end
 
 
-def send_email(message, from=@email_configs['sender'], to=@email_configs['recepients'])
-  formatted_message = @email_header + message
-  Net::SMTP.start(@email_configs['smtp_host'], @email_configs['smtp_port']) do |smtp|
-    smtp.send_message formatted_message, from, to
+def send_email(message, from_email=@email_configs['sender'], to_email=@email_configs['recepients'])
+  Mail.deliver do
+        from from_email
+        to   to_email
+        subject "Replication Error"
+        body message
   end
 end
 
@@ -125,20 +134,12 @@ def send_sms(message,from=@sms_configs['sender'], to=@sms_configs['recepient'])
 end
 
 
-def gen_email_header(db_config)
-  <<-EOH
-From: Replication Monitor
-Subject: Replication lag on #{@server_name} for #{db_config['database']}
-
-  EOH
-end
-
-
 def email_message(db_config, lag)
-
   error_log_last_100_lines = `tail -n20 #{db_config['error_log']}`
-  
+
   <<END_OF_MESSAGE
+Error in replication for #{db_config['database']}
+
 Replication is lagging by #{lag}, which is more than the allowed limit of #{@allowed_lag} seconds.
 Please check the replication server immidiately.
 
@@ -149,6 +150,7 @@ MYSQL ERROR OUTPUT (located at #{db_config['error_log']})
 END_OF_MESSAGE
 
 end
+
 
 
 start
