@@ -1,0 +1,33 @@
+allowed_lag: 120 (in seconds)
+server_name: Server that is running replication
+
+sms_configs:
+  sms_gateway_domain: sms.mail.com
+  sender: configured.email@localhost.com
+  recepient: 25413652785
+
+email_configs:
+  smtp_host: host
+  smtp_port: 25
+  sender: support@replication.com.au
+  recepients: support@replication.com.au
+
+databases:
+  slave1:
+    host: 127.0.0.1
+    port: 3305
+    database: replication1_production
+    user: msandbox
+    password: msandbox
+    error_log: /var/sandboxes/replication_slave1/msandbox.err
+    strategy: slave_status ( or heartbeat)
+  
+  slave2:
+    host: 127.0.0.1
+    port: 3304
+    database: replication2_production
+    user: msandbox
+    password: msandbox
+    error_log: /var/sandboxes/replication_slave2/msandbox.err
+    strategy: heartbeat
+    heartbeat_table: heartbeat
