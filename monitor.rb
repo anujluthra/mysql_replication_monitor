@@ -48,7 +48,8 @@ end
 def do_check(db_config)
   begin
     ################################################
-    # Connect to database and fetch latest heartbeat
+    # Connect to database
+    
     db = Mysql.real_connect(db_config['host'], db_config['user'], db_config['password'], db_config['database'], db_config['port'])
     
     replication_lag = case db_config['strategy']
@@ -83,7 +84,7 @@ def do_slave_status_check(db)
   # We are not using all the informational fields right now (require more implementation)
   # but should be used as additional checks besides just the lag(which can be unrelilable)
   slave_state = result.first# not being used
-  lag = result.last
+  lag = result.last.to_i
   error_number = result[18] # not being used 
   error_code   = result[19] # not being used
   return lag
